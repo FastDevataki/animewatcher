@@ -51,6 +51,7 @@ import com.stuffbox.webscraper.constants.Constants;
 
 import org.jsoup.Connection;
 import org.jsoup.Jsoup;
+import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 
 import java.io.IOException;
@@ -237,7 +238,8 @@ l=elements.attr("data-video");;
                     Elements elements1 = reacheddownloadlink.select("div[class=dowload]").select("a");
                     while (elements1.eq(qualitysetter).attr("href").contains("googlevideo")
                           ||elements1.eq(qualitysetter).attr("href").contains("googleuser")
-                            )
+                         //   || elements1.eq(qualitysetter).attr("href").contains("cdnfile.info")
+                       )
                     { storinggoogleurls.add(elements1.eq(qualitysetter).attr("href"));
                         String x=String.valueOf(elements1.eq(qualitysetter).text());
                         String c= x.substring(10, 15);
@@ -255,8 +257,9 @@ l=elements.attr("data-video");;
                              rapidvideo = Jsoup.connect(elements1.eq(ind).attr("href")).get();
                             else
                                 rapidvideo=Jsoup.connect(elements1.eq(qualitysetter+1).attr("href")).get();
-                            Elements e = rapidvideo.select("div[class=video]");
-                            if(e.size()>0)
+                           /*  Old rapidvideo scraping
+                             Elements e = rapidvideo.select("div[class=video]");
+                           if(e.size()>0)
                             {
                             Elements f = e.eq(e.size() - 1).select("span").select("a");
                             if(f.size()>0) {
@@ -273,7 +276,25 @@ l=elements.attr("data-video");;
                                 finallink=f.eq(qualitysetter).attr("href");
                                 current=qualitysetter;
                             }
-                        }
+
+                        } */
+                          Elements links = rapidvideo.select("a[id=button-download]");
+                          if(links.size()>0)
+                          {
+                              qualitysetter=-1;
+                              for(int m = 0;m<links.size();m++)
+                              {
+                                  if (!(links.eq(m).attr("href").contains("premium"))) {
+                                      storinggoogleurls.add(links.eq(m).attr("href"));
+                                      String p = links.eq(m).text();
+                                      int index = p.indexOf(" ");
+                                      storingquality.add(p.substring(index + 1));
+                                      qualitysetter++;
+                                  }
+                              }
+                              finallink=links.eq(qualitysetter).attr("href");
+                              current=qualitysetter;
+                          }
                         }
 
                         else
@@ -346,6 +367,7 @@ l=elements.attr("data-video");;
                   finish();
               }
               else{
+                  Log.d("playingvideourl",finallink);
 
                   MediaSource vediosource = new ExtractorMediaSource.Factory(datasourcefactory).createMediaSource(Uri.parse(finallink));
                   simpleExoPlayer.prepare(vediosource);

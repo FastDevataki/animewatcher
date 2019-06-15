@@ -211,7 +211,7 @@ else
             mRecyclerView.setAdapter(mDataAdapter);
             editText.setHint("Episode no between 1 to "+mEpisodeList.size());
 editText.setFilters(new InputFilter[]{
-        new InputFilterMinMax(0,mEpisodeList.size())
+        new InputFilterMinMax(1,mEpisodeList.size())
 })
             ;
 
