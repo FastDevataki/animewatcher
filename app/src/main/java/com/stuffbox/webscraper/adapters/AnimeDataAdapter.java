@@ -13,10 +13,12 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.TextView;
+import android.widget.VideoView;
 
 
 import com.squareup.picasso.Picasso;
 import com.stuffbox.webscraper.R;
+import com.stuffbox.webscraper.activities.TestVideoView;
 import com.stuffbox.webscraper.activities.WatchVideo;
 import com.stuffbox.webscraper.models.Anime;
 

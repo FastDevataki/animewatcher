@@ -17,6 +17,8 @@
         android:roundIcon="@drawable/psyduck"
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
+
+
         <activity android:name=".activities.MainActivity"
             android:label="Anime Watcher"
 
@@ -47,7 +49,6 @@
             android:launchMode="singleTask"
             android:screenOrientation="landscape"
             android:theme="@android:style/Theme.NoTitleBar.Fullscreen" />
-        android:configChanges="orientation|screenSize"/>
         <activity android:name=".activities.AnimeList"
             android:configChanges="orientation|screenSize"
             android:label="Anime List"/>
@@ -55,6 +56,14 @@
             android:label="Settings"
             android:configChanges="orientation|screenSize"
             />
+        <activity android:name=".activities.TestVideoView"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout"
+
+            android:screenOrientation="landscape"
+            android:resizeableActivity="true"
+            android:launchMode="singleTask"
+            android:supportsPictureInPicture="true"
+            android:theme="@style/Theme.AppCompat.Light.NoActionBar.FullScreen"/>
     </application>
 
 </manifest>
