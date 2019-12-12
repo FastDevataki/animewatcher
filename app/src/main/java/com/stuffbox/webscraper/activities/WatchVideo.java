@@ -1,11 +1,13 @@
 package com.stuffbox.webscraper.activities;
 
 import android.app.ActivityManager;
+import android.app.AlertDialog;
 import android.app.PendingIntent;
 import android.app.PictureInPictureParams;
 import android.app.RemoteAction;
 import android.content.BroadcastReceiver;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.res.Configuration;
@@ -39,6 +41,7 @@ import com.google.android.exoplayer2.upstream.DataSource;
 import com.google.android.exoplayer2.upstream.DefaultDataSourceFactory;
 import com.google.android.exoplayer2.util.Util;
 import com.stuffbox.webscraper.R;
+import com.stuffbox.webscraper.constants.Constants;
 
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -55,15 +58,18 @@ public class WatchVideo extends AppCompatActivity {
     PlayerView playerView;
     SimpleExoPlayer player;
     LinearLayout controls;
-    ImageButton nextEpisodeButton,previousEpisodeButton;
+    ImageButton nextEpisodeButton, previousEpisodeButton, qualityChangerButton;
     ProgressBar progressBar;
     TextView title;
     String imageLink;
     String nextVideoLink = null;
-    String previousVideoLink = null ;
-    String m3u8link= "" ;
+    String previousVideoLink = null;
+    String m3u8link = "";
     Context context;
+    ArrayList<String> qualityUrls = new ArrayList<>();
+    ArrayList<String> qualityInfo = new ArrayList<>();
     String vidStreamUrl;
+        int currentQuality;
     BroadcastReceiver receiver;
 
     private static final Pattern urlPattern = Pattern.compile(
@@ -74,38 +80,60 @@ public class WatchVideo extends AppCompatActivity {
     private static final String ACTION_MEDIA_CONTROL = "media_control";
     private static final String EXTRA_CONTROL_TYPE = "control_type";
     private String animeName;
-    int episodeNumber ;
+    int episodeNumber;
     long time;
-    String backStack="";
+    String backStack = "";
     SQLiteDatabase recent;
 
-    private  PictureInPictureParams.Builder mPictureInPictureParamsBuilder;
-    View.OnClickListener nextEpisodeOnClickListener  = new View.OnClickListener() {
+    private PictureInPictureParams.Builder mPictureInPictureParamsBuilder;
+    View.OnClickListener nextEpisodeOnClickListener = new View.OnClickListener() {
         @Override
         public void onClick(View view) {
-            if(nextVideoLink==null||nextVideoLink.equals(""))
-                Toast.makeText(getApplicationContext(),"Last Episode",Toast.LENGTH_SHORT).show();
-            else
-            {
-                episodeNumber+=1;
-                executeQuery(animeName,episodeNumber,nextVideoLink,imageLink);
+            if (nextVideoLink == null || nextVideoLink.equals(""))
+                Toast.makeText(getApplicationContext(), "Last Episode", Toast.LENGTH_SHORT).show();
+            else {
+                episodeNumber += 1;
+                executeQuery(animeName, episodeNumber, nextVideoLink, imageLink);
 
-                new ScrapeVideoLink(nextVideoLink,context).execute();
+                new ScrapeVideoLink(nextVideoLink, context).execute();
             }
         }
     };
-    View.OnClickListener previousEpisodeOnClickListener = new View.OnClickListener(){
+    View.OnClickListener previousEpisodeOnClickListener = new View.OnClickListener() {
         @Override
         public void onClick(View view) {
-            if(previousVideoLink==null||previousVideoLink.equals(""))
-                Toast.makeText(getApplicationContext(),"First Episode",Toast.LENGTH_SHORT).show();
-            else
-            {
-                episodeNumber-=1;
-                executeQuery(animeName,episodeNumber,previousVideoLink,imageLink);
+            if (previousVideoLink == null || previousVideoLink.equals(""))
+                Toast.makeText(getApplicationContext(), "First Episode", Toast.LENGTH_SHORT).show();
+            else {
+                episodeNumber -= 1;
+                executeQuery(animeName, episodeNumber, previousVideoLink, imageLink);
 
-                new ScrapeVideoLink(previousVideoLink,context).execute();
+                new ScrapeVideoLink(previousVideoLink, context).execute();
             }
+        }
+    };
+    View.OnClickListener qualityChangerOnClickListener = new View.OnClickListener() {
+        @Override
+        public void onClick(View view) {
+            AlertDialog.Builder builder = new AlertDialog.Builder(WatchVideo.this, AlertDialog.THEME_DEVICE_DEFAULT_LIGHT);
+            builder.setTitle("Quality")
+                    .setItems(qualityInfo.toArray(new String[0]), new DialogInterface.OnClickListener() {
+                        public void onClick(DialogInterface dialog, int which) {
+                            if (currentQuality != which) {
+                                long t = player.getCurrentPosition();
+                                currentQuality = which;
+                                DataSource.Factory dataSourceFactory = new DefaultDataSourceFactory(context,
+                                        Util.getUserAgent(context, "Mozilla/5.0 (Macintosh; U; Intel Mac OS X 10_5_8; en-US) AppleWebKit/532.5 (KHTML, like Gecko) Chrome/4.0.249.0 Safari/532.5"));
+
+                                HlsMediaSource hlsMediaSource =
+                                        new HlsMediaSource.Factory(dataSourceFactory).createMediaSource(Uri.parse(qualityUrls.get(currentQuality)));
+                                player.prepare(hlsMediaSource);
+                                player.setPlayWhenReady(true);
+                                player.seekTo(t);
+                            }
+                        }
+                    });
+            builder.show();
         }
     };
 
@@ -123,6 +151,8 @@ public class WatchVideo extends AppCompatActivity {
         String link= getIntent().getStringExtra("link");
         int lastIndexOfDash = link.lastIndexOf("-");
         episodeNumber = Integer.parseInt(link.substring(lastIndexOfDash+1));
+        animeName = getIntent().getStringExtra("animename");
+
         imageLink=getIntent().getStringExtra("imagelink");
 
         new ScrapeVideoLink(link,this).execute();
@@ -136,7 +166,7 @@ public class WatchVideo extends AppCompatActivity {
         controls = findViewById(R.id.wholecontroller);
         progressBar=findViewById(R.id.buffer);
         title=findViewById(R.id.titleofanime);
-
+        qualityChangerButton = findViewById(R.id.qualitychanger);
         nextEpisodeButton=findViewById(R.id.exo_nextvideo);
         previousEpisodeButton=findViewById(R.id.exo_prevvideo);
     }
@@ -215,7 +245,8 @@ public class WatchVideo extends AppCompatActivity {
             super.onPreExecute();
             title.setVisibility(View.GONE);
             m3u8link="";
-            animeName = getIntent().getStringExtra("animename");
+            qualityInfo.clear();
+            qualityUrls.clear();
             progressBar.setVisibility(View.VISIBLE);
 
         }
@@ -223,15 +254,23 @@ public class WatchVideo extends AppCompatActivity {
         @Override
         protected void onPostExecute(Void aVoid) {
             super.onPostExecute(aVoid);
-            if(m3u8link.equals(""))
-                useFallBack();
-            DataSource.Factory dataSourceFactory = new DefaultDataSourceFactory(context,
-                    Util.getUserAgent(context, "Mozilla/5.0 (Macintosh; U; Intel Mac OS X 10_5_8; en-US) AppleWebKit/532.5 (KHTML, like Gecko) Chrome/4.0.249.0 Safari/532.5"));
+            try
+            {
+                if(m3u8link.equals(""))
+                    useFallBack();
+                DataSource.Factory dataSourceFactory = new DefaultDataSourceFactory(context,
+                        Util.getUserAgent(context, "Mozilla/5.0 (Macintosh; U; Intel Mac OS X 10_5_8; en-US) AppleWebKit/532.5 (KHTML, like Gecko) Chrome/4.0.249.0 Safari/532.5"));
 
-            HlsMediaSource hlsMediaSource =
-                    new HlsMediaSource.Factory(dataSourceFactory).createMediaSource(Uri.parse(m3u8link));
-            player.prepare(hlsMediaSource);
-            player.setPlayWhenReady(true);
+                HlsMediaSource hlsMediaSource =
+                        new HlsMediaSource.Factory(dataSourceFactory).createMediaSource(Uri.parse(qualityUrls.get(currentQuality)));
+                player.prepare(hlsMediaSource);
+                player.setPlayWhenReady(true);
+            }
+            catch (Exception e)
+            {
+                useFallBack();
+            }
+
             player.addListener(new Player.EventListener() {
                 @Override
                 public void onPlayerStateChanged(boolean playWhenReady, int playbackState) {
@@ -263,6 +302,7 @@ public class WatchVideo extends AppCompatActivity {
             title.setText(animeName+" Episode "+episodeNumber);
             nextEpisodeButton.setOnClickListener(nextEpisodeOnClickListener);
             previousEpisodeButton.setOnClickListener(previousEpisodeOnClickListener);
+            qualityChangerButton.setOnClickListener(qualityChangerOnClickListener);
             title.setVisibility(View.VISIBLE);
         }
 
@@ -270,18 +310,62 @@ public class WatchVideo extends AppCompatActivity {
         protected Void doInBackground(Void... voids) {
             Document gogoAnimePageDocument = null;
             try {
-                gogoAnimePageDocument = Jsoup.connect(gogoAnimeUrl).get();
-                vidStreamUrl = "https:"+gogoAnimePageDocument.getElementsByClass("play-video").get(0).getElementsByTag("iframe").get(0).attr("src");
+                if (gogoAnimeUrl.equals("https://www1.gogoanimes.ai/ansatsu-kyoushitsu-tv--episode-1")  )//edge case
+
+                {            Log.i("gogoanimeUrl",Constants.url + "ansatsu-kyoushitsu-tv--episode-1");
+
+
+                    gogoAnimePageDocument = Jsoup.connect("https://www1.gogoanimes.ai/ansatsu-kyoushitsu-episode-1").get();
+
+                }
+                else
+                    gogoAnimePageDocument = Jsoup.connect(gogoAnimeUrl).get();                vidStreamUrl = "https:"+gogoAnimePageDocument.getElementsByClass("play-video").get(0).getElementsByTag("iframe").get(0).attr("src");
                 previousVideoLink=gogoAnimePageDocument.select("div[class=anime_video_body_episodes_l]").select("a").attr("abs:href");
                 nextVideoLink=gogoAnimePageDocument.select("div[class=anime_video_body_episodes_r]").select("a").attr("abs:href");
                 m3u8link  = getM3u8Url(vidStreamUrl);
+                fillQualityList();
 
-            } catch (IOException e) {
-                e.printStackTrace();
+            } catch (Exception e) {
+                Log.i("gogoanimeerror",e.toString());
             }
             return null;
         }
     }
+
+    private void fillQualityList() {
+        try {
+            Document m3u8Page = Jsoup.connect(m3u8link).get();
+            String htmlToParse=  m3u8Page.outerHtml();
+            Pattern qualityPattern = Pattern.compile("[0-9]{3,4}x[0-9]{3,4}");
+            Pattern m3u8LinkPattern = Pattern.compile("(drive\\/\\/hls\\/(\\w)*\\/(\\w)*.m3u8)|(hls\\/(\\w)*\\/(\\w)*.m3u8)");
+            Matcher qualityMatcher = qualityPattern.matcher(htmlToParse);
+            Matcher m3u8LinkMatcher = m3u8LinkPattern.matcher(htmlToParse);
+            int index = m3u8link.indexOf("/hls");
+            String baseUrl = m3u8link.substring(0,index+1);
+
+            while(qualityMatcher.find())
+            {
+                String quality  = htmlToParse.substring(qualityMatcher.start(),qualityMatcher.end());
+
+                qualityInfo.add(quality);
+
+
+            }
+            while(m3u8LinkMatcher.find())
+            {
+                String qualityUrl  = baseUrl +htmlToParse.substring(m3u8LinkMatcher.start(),m3u8LinkMatcher.end());
+
+                qualityUrls.add(qualityUrl);
+
+            }
+            currentQuality = 0;
+
+        } catch (Exception e) {
+            Log.i("qualityError",e.toString());
+        }
+
+    }
+
     @Override
     public void onUserLeaveHint()
     {
@@ -430,4 +514,5 @@ public class WatchVideo extends AppCompatActivity {
         startActivity(intent);
         finish();
     }
+
 }
