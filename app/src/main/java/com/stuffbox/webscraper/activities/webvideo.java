@@ -41,14 +41,12 @@ public class webvideo extends Activity {
         settings.setSaveFormData(true);
         try {
             url = getIntent().getStringExtra("videostreamlink");
-            url="https://www.google.com/";
         }catch (Exception e)
         {
-            url="https://www.google.com/";
+            e.printStackTrace();
         }
-        url="https://www.google.com/";
 
-       // Log.i("checkingstring",url);
+       Log.i("checkingstring",url);
 
        webView.loadUrl(url);
 

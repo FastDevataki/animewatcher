@@ -38,14 +38,13 @@ import com.google.android.exoplayer2.Player;
 import com.google.android.exoplayer2.SimpleExoPlayer;
 import com.google.android.exoplayer2.source.hls.HlsMediaSource;
 import com.google.android.exoplayer2.ui.PlayerView;
-import com.google.android.exoplayer2.upstream.DataSource;
-import com.google.android.exoplayer2.upstream.DefaultDataSourceFactory;
 import com.google.android.exoplayer2.upstream.DefaultHttpDataSourceFactory;
 import com.google.android.exoplayer2.util.Util;
 import com.stuffbox.webscraper.R;
-import com.stuffbox.webscraper.constants.Constants;
 import com.stuffbox.webscraper.models.Quality;
-import com.stuffbox.webscraper.scrapers.VidCdnScraper;
+import com.stuffbox.webscraper.scrapers.Option1;
+import com.stuffbox.webscraper.scrapers.Option2;
+import com.stuffbox.webscraper.scrapers.Scraper;
 
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -66,15 +65,19 @@ public class WatchVideo extends AppCompatActivity {
     ProgressBar progressBar;
     TextView title;
     String imageLink;
+    boolean changedScraper = false;
+    long time ;
     String nextVideoLink = null;
     String previousVideoLink = null;
     public static String url = "https://www1.gogoanimes.ai/";
-
+    int currentScraper =  0;
+    ArrayList<Scraper> scrapers = new ArrayList<>();
     String m3u8link = "";
     Context context;
     ArrayList<Quality> qualities;
     String vidStreamUrl;
     int currentQuality;
+    String link;
     BroadcastReceiver receiver;
     String host;
     private static final Pattern urlPattern = Pattern.compile(
@@ -86,7 +89,6 @@ public class WatchVideo extends AppCompatActivity {
     private static final String EXTRA_CONTROL_TYPE = "control_type";
     private String animeName;
     int episodeNumber;
-    long time;
     String backStack = "";
     SQLiteDatabase recent;
 
@@ -99,7 +101,7 @@ public class WatchVideo extends AppCompatActivity {
             else {
                 episodeNumber += 1;
                 executeQuery(animeName, episodeNumber, nextVideoLink, imageLink);
-
+                currentScraper=0;
                 new ScrapeVideoLink(nextVideoLink, context).execute();
             }
         }
@@ -111,14 +113,17 @@ public class WatchVideo extends AppCompatActivity {
                 Toast.makeText(getApplicationContext(), "First Episode", Toast.LENGTH_SHORT).show();
             else {
                 episodeNumber -= 1;
+                currentScraper =0;
                 executeQuery(animeName, episodeNumber, previousVideoLink, imageLink);
 
                 new ScrapeVideoLink(previousVideoLink, context).execute();
             }
         }
     };
+
     View.OnClickListener qualityChangerOnClickListener = new View.OnClickListener() {
-        @Override
+
+            @Override
         public void onClick(View view) {
             ArrayList<String> qualityInfo = new ArrayList<>();
             for(Quality quality : qualities)
@@ -145,8 +150,11 @@ public class WatchVideo extends AppCompatActivity {
     };
     DefaultHttpDataSourceFactory getSettedHeadersDataFactory()
     {
-        Log.i("igotcaled","igtocalled");
+
+
         String userAgent = Util.getUserAgent(context, "Mozilla/5.0 (Macintosh; U; Intel Mac OS X 10_5_8; en-US) AppleWebKit/532.5 (KHTML, like Gecko) Chrome/4.0.249.0 Safari/532.5");
+       if(currentScraper == 0 )
+         return new DefaultHttpDataSourceFactory(userAgent);
         DefaultHttpDataSourceFactory dataSourceFactory = new DefaultHttpDataSourceFactory(userAgent);
 
         dataSourceFactory.getDefaultRequestProperties().set("Accept", "*/*");
@@ -159,7 +167,6 @@ public class WatchVideo extends AppCompatActivity {
         dataSourceFactory.getDefaultRequestProperties().set("Sec-Fetch-Site", "cross-site");
         dataSourceFactory.getDefaultRequestProperties().set("User-Agent", userAgent);
         dataSourceFactory.getDefaultRequestProperties().set("Host", host);
-        Log.i("hostis",host);
         return  dataSourceFactory;
     }
 
@@ -174,7 +181,8 @@ public class WatchVideo extends AppCompatActivity {
         player = ExoPlayerFactory.newSimpleInstance(this);
         playerView.setPlayer(player);
 
-        String link = getIntent().getStringExtra("link");
+         link = getIntent().getStringExtra("link");
+
         int lastIndexOfDash = link.lastIndexOf("-");
         episodeNumber = Integer.parseInt(link.substring(lastIndexOfDash + 1));
         animeName = getIntent().getStringExtra("animename");
@@ -204,30 +212,6 @@ public class WatchVideo extends AppCompatActivity {
         decorView.setSystemUiVisibility(uiOptions);
     }
 
-    String getM3u8Url(String vidStreamUrl) {
-        try {
-            Document videoStreamPageDocument = Jsoup.connect(vidStreamUrl).get();
-            String html = videoStreamPageDocument.outerHtml();
-            Matcher matcher = urlPattern.matcher(html);
-            String m3u8Link = "";
-            while (matcher.find()) {
-                int matchStart = matcher.start(1);
-                int matchEnd = matcher.end();
-                String link = html.substring(matchStart, matchEnd);
-                if (link.contains("m3u8")) {
-                    m3u8Link = link.substring(0, link.indexOf("'"));
-                    break;
-
-                }
-            }
-            Log.i("foundLink", m3u8Link);
-            return m3u8Link;
-
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        return "";
-    }
 
     private void hideSystemUI() {
         View decorView = getWindow().getDecorView();
@@ -267,33 +251,26 @@ public class WatchVideo extends AppCompatActivity {
             title.setVisibility(View.GONE);
             m3u8link = "";
             progressBar.setVisibility(View.VISIBLE);
+            scrapers.clear();
 
         }
 
         @Override
         protected void onPostExecute(Void aVoid) {
             super.onPostExecute(aVoid);
-            Log.i("ireachhere","here");
             try {
-          //      if (m3u8link.equals(""))
-            //        useFallBack();
-                String userAgent = Util.getUserAgent(context, "Mozilla/5.0 (Macintosh; U; Intel Mac OS X 10_5_8; en-US) AppleWebKit/532.5 (KHTML, like Gecko) Chrome/4.0.249.0 Safari/532.5");
-                DefaultHttpDataSourceFactory dataSourceFactory = new DefaultHttpDataSourceFactory(userAgent);
 
-                dataSourceFactory.getDefaultRequestProperties().set("Accept", "*/*");
-                dataSourceFactory.getDefaultRequestProperties().set("Accept-Encoding", "gzip,deflate,br");
-                dataSourceFactory.getDefaultRequestProperties().set("Accept-Language", "en-IN,en;q=0.9,ur-IN;q=0.8,ur;q=0.7,en-GB;q=0.6,en-US;q=0.5");
-                dataSourceFactory.getDefaultRequestProperties().set("Connection", "keep-alive");
-                dataSourceFactory.getDefaultRequestProperties().set("Origin", "https://vidstreaming.io");
-                dataSourceFactory.getDefaultRequestProperties().set("Referer", "https://vidstreaming.io");
-                dataSourceFactory.getDefaultRequestProperties().set("Sec-Fetch-Mode", "cors");
-                dataSourceFactory.getDefaultRequestProperties().set("Sec-Fetch-Site", "cross-site");
-                dataSourceFactory.getDefaultRequestProperties().set("User-Agent", userAgent);
-                dataSourceFactory.getDefaultRequestProperties().set("Host", host);
+                DefaultHttpDataSourceFactory dataSourceFactory = getSettedHeadersDataFactory();
+                Log.i("currentlyplaying",qualities.get(currentQuality).getQualityUrl());
                 HlsMediaSource hlsMediaSource =
                         new HlsMediaSource.Factory(dataSourceFactory).createMediaSource(Uri.parse(qualities.get(currentQuality).getQualityUrl()));
-                        player.prepare(hlsMediaSource);
-                player.setPlayWhenReady(true);
+               player.prepare(hlsMediaSource);
+                        player.setPlayWhenReady(true);
+                        if(changedScraper)
+                        {
+                            changedScraper = false;
+                            player.seekTo(time);
+                        }
             } catch (Exception e) {
                 Log.i("exoerror",e.getMessage());
                 //useFallBack();
@@ -321,6 +298,11 @@ public class WatchVideo extends AppCompatActivity {
                 @Override
                 public void onPlayerError(ExoPlaybackException error) {
                     Log.i("exoerror",error.getMessage());
+                    currentScraper++;
+                    if(currentScraper==scrapers.size())
+                        useFallBack();
+                    else
+                        changingScraper();
                    // useFallBack();
                 }
             });
@@ -342,15 +324,26 @@ public class WatchVideo extends AppCompatActivity {
 
 
                 gogoAnimePageDocument = Jsoup.connect(gogoAnimeUrl).get();
-          //      vidStreamUrl = "https:" + gogoAnimePageDocument.getElementsByClass("play-video").get(0).getElementsByTag("iframe").get(0).attr("src");
+               vidStreamUrl = "https:" + gogoAnimePageDocument.getElementsByClass("play-video").get(0).getElementsByTag("iframe").get(0).attr("src");
                 previousVideoLink = gogoAnimePageDocument.select("div[class=anime_video_body_episodes_l]").select("a").attr("abs:href");
                 nextVideoLink = gogoAnimePageDocument.select("div[class=anime_video_body_episodes_r]").select("a").attr("abs:href");
-                VidCdnScraper scraper = new VidCdnScraper(gogoAnimePageDocument);
-                qualities = scraper.getQualityUrls();
-                host = scraper.getHost();
+                Option1 option1 = new Option1(gogoAnimePageDocument);
+                Option2 option2 = new Option2(gogoAnimePageDocument);
+                scrapers.add(option1);
+                scrapers.add(option2);
+                qualities = scrapers.get(currentScraper).getQualityUrls();
+                if(qualities.size()==0)
+                {
+                    currentScraper++;
+                    if(currentScraper==scrapers.size())
+                    {
+                        useFallBack();
+                    }
+                    else
+                        changingScraper();
+                }
+                host = scrapers.get(currentScraper).getHost();
                 currentQuality = 0;
-            //    m3u8link = getM3u8Url(vidStreamUrl);
-                fillQualityList();
 
             } catch (Exception e) {
                 Log.i("gogoanimeerror", e.toString());
@@ -359,37 +352,6 @@ public class WatchVideo extends AppCompatActivity {
         }
     }
 
-    private void fillQualityList() {
-        try {
-            Document m3u8Page = Jsoup.connect(m3u8link).get();
-            String htmlToParse = m3u8Page.outerHtml();
-            Pattern qualityPattern = Pattern.compile("[0-9]{3,4}x[0-9]{3,4}");
-            Pattern m3u8LinkPattern = Pattern.compile("(drive\\/\\/hls\\/(\\w)*\\/(\\w)*.m3u8)|(hls\\/(\\w)*\\/(\\w)*.m3u8)");
-            Matcher qualityMatcher = qualityPattern.matcher(htmlToParse);
-            Matcher m3u8LinkMatcher = m3u8LinkPattern.matcher(htmlToParse);
-            int index = m3u8link.indexOf("/hls");
-            String baseUrl = m3u8link.substring(0, index + 1);
-
-            while (qualityMatcher.find()) {
-                String quality = htmlToParse.substring(qualityMatcher.start(), qualityMatcher.end());
-
-              //  qualityInfo.add(quality);
-
-
-            }
-            while (m3u8LinkMatcher.find()) {
-                String qualityUrl = baseUrl + htmlToParse.substring(m3u8LinkMatcher.start(), m3u8LinkMatcher.end());
-
-              //  qualityUrls.add(qualityUrl);
-
-            }
-            currentQuality = 0;
-
-        } catch (Exception e) {
-            Log.i("qualityError", e.toString());
-        }
-
-    }
 
     @Override
     public void onUserLeaveHint() {
@@ -452,7 +414,8 @@ public class WatchVideo extends AppCompatActivity {
                         requestCode,
                         newintent,
                         0);
-        final Icon icon = Icon.createWithResource(WatchVideo.this, iconId);
+        final Icon icon = Icon.createWithResource(
+                WatchVideo.this, iconId);
         RemoteAction action = new RemoteAction(icon, title, title, intent);
         actions.add(action);
         mPictureInPictureParamsBuilder.setActions(actions);
@@ -536,5 +499,10 @@ public class WatchVideo extends AppCompatActivity {
         startActivity(intent);
         finish();
     }
-
+    void changingScraper()
+    {
+        new ScrapeVideoLink(link, context).execute();
+        changedScraper = true;
+        time = player.getCurrentPosition();
+    }
 }
