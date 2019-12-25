@@ -39,8 +39,16 @@ public class webvideo extends Activity {
         settings.setJavaScriptEnabled(true);
         settings.setAppCacheEnabled(true);
         settings.setSaveFormData(true);
-        url = getIntent().getStringExtra("videostreamlink");
-       Log.i("checkingstring",url);
+        try {
+            url = getIntent().getStringExtra("videostreamlink");
+            url="https://www.google.com/";
+        }catch (Exception e)
+        {
+            url="https://www.google.com/";
+        }
+        url="https://www.google.com/";
+
+       // Log.i("checkingstring",url);
 
        webView.loadUrl(url);
 
