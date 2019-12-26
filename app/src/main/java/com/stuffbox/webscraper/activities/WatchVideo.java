@@ -16,7 +16,6 @@ import android.graphics.drawable.Icon;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
-import android.provider.SyncStateContract;
 import android.util.Log;
 import android.view.KeyEvent;
 import android.view.View;
@@ -48,13 +47,9 @@ import com.stuffbox.webscraper.scrapers.Scraper;
 
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
-import org.w3c.dom.Text;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 
 public class WatchVideo extends AppCompatActivity {
@@ -72,7 +67,8 @@ public class WatchVideo extends AppCompatActivity {
     public static String url = "https://www1.gogoanimes.ai/";
     int currentScraper =  0;
     ArrayList<Scraper> scrapers = new ArrayList<>();
-    String m3u8link = "";
+
+
     Context context;
     ArrayList<Quality> qualities;
     String vidStreamUrl;
@@ -80,11 +76,6 @@ public class WatchVideo extends AppCompatActivity {
     String link;
     BroadcastReceiver receiver;
     String host;
-    private static final Pattern urlPattern = Pattern.compile(
-            "(?:^|[\\W])((ht|f)tp(s?):\\/\\/|www\\.)"
-                    + "(([\\w\\-]+\\.){1,}?([\\w\\-.~]+\\/?)*"
-                    + "[\\p{Alnum}.,%_=?&#\\-+()\\[\\]\\*$~@!:/{};']*)",
-            Pattern.CASE_INSENSITIVE | Pattern.MULTILINE | Pattern.DOTALL);
     private static final String ACTION_MEDIA_CONTROL = "media_control";
     private static final String EXTRA_CONTROL_TYPE = "control_type";
     private String animeName;
@@ -249,7 +240,6 @@ public class WatchVideo extends AppCompatActivity {
         protected void onPreExecute() {
             super.onPreExecute();
             title.setVisibility(View.GONE);
-            m3u8link = "";
             progressBar.setVisibility(View.VISIBLE);
             scrapers.clear();
 
@@ -273,7 +263,7 @@ public class WatchVideo extends AppCompatActivity {
                         }
             } catch (Exception e) {
                 Log.i("exoerror",e.getMessage());
-                //useFallBack();
+                useFallBack();
             }
 
             player.addListener(new Player.EventListener() {
@@ -435,7 +425,7 @@ public class WatchVideo extends AppCompatActivity {
     //  LifeCycleEvents
     @Override
     public void onSaveInstanceState(@NonNull Bundle outState) {
-        outState.putString("videolink", m3u8link);
+        outState.putString("videolink", qualities.get(currentQuality).getQualityUrl());
 
         super.onSaveInstanceState(outState);
     }
@@ -459,11 +449,10 @@ public class WatchVideo extends AppCompatActivity {
     public void onResume() {
         super.onResume();
 
-        if (!m3u8link.equals("")) {
 
             playerView.getPlayer().setPlayWhenReady(true);
 
-        }
+
     }
 
     @Override
