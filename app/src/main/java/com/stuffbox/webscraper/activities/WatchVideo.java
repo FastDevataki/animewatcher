@@ -11,7 +11,6 @@ import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.res.Configuration;
-import android.database.sqlite.SQLiteDatabase;
 import android.graphics.drawable.Icon;
 import android.net.Uri;
 import android.os.AsyncTask;
@@ -40,6 +39,8 @@ import com.google.android.exoplayer2.ui.PlayerView;
 import com.google.android.exoplayer2.upstream.DefaultHttpDataSourceFactory;
 import com.google.android.exoplayer2.util.Util;
 import com.stuffbox.webscraper.R;
+import com.stuffbox.webscraper.database.AnimeDatabase;
+import com.stuffbox.webscraper.models.Anime;
 import com.stuffbox.webscraper.models.Quality;
 import com.stuffbox.webscraper.scrapers.Option1;
 import com.stuffbox.webscraper.scrapers.Option2;
@@ -63,14 +64,14 @@ public class WatchVideo extends AppCompatActivity {
     TextView title;
     String imageLink;
     boolean changedScraper = false;
-    long time ;
+    long time;
+    AnimeDatabase animeDatabase;
     String nextVideoLink = null;
     String previousVideoLink = null;
     public static String url = "https://www1.gogoanimes.ai/";
-    int currentScraper =  0;
+    int currentScraper = 1;
     ArrayList<Scraper> scrapers = new ArrayList<>();
-
-
+    boolean startedPlaying = false;
     Context context;
     ArrayList<Quality> qualities;
     String vidStreamUrl;
@@ -82,9 +83,10 @@ public class WatchVideo extends AppCompatActivity {
     private static final String EXTRA_CONTROL_TYPE = "control_type";
     private String animeName;
     int episodeNumber;
+    boolean changedAnime = false;
     String backStack = "";
-    SQLiteDatabase recent;
-    Timer updateTimer ;
+    Anime currentAnime;
+    Timer updateTimer;
     private PictureInPictureParams.Builder mPictureInPictureParamsBuilder;
     View.OnClickListener nextEpisodeOnClickListener = new View.OnClickListener() {
         @Override
@@ -92,9 +94,12 @@ public class WatchVideo extends AppCompatActivity {
             if (nextVideoLink == null || nextVideoLink.equals(""))
                 Toast.makeText(getApplicationContext(), "Last Episode", Toast.LENGTH_SHORT).show();
             else {
+                updateTimer.cancel();
                 episodeNumber += 1;
+                changedAnime = true;
                 executeQuery(animeName, episodeNumber, nextVideoLink, imageLink);
-                currentScraper=0;
+                currentScraper = 1;
+                player.setPlayWhenReady(false);
                 new ScrapeVideoLink(nextVideoLink, context).execute();
             }
         }
@@ -105,8 +110,11 @@ public class WatchVideo extends AppCompatActivity {
             if (previousVideoLink == null || previousVideoLink.equals(""))
                 Toast.makeText(getApplicationContext(), "First Episode", Toast.LENGTH_SHORT).show();
             else {
+                updateTimer.cancel();
+                changedAnime = true;
                 episodeNumber -= 1;
-                currentScraper =0;
+                currentScraper = 1;
+                player.setPlayWhenReady(false);
                 executeQuery(animeName, episodeNumber, previousVideoLink, imageLink);
 
                 new ScrapeVideoLink(previousVideoLink, context).execute();
@@ -116,11 +124,11 @@ public class WatchVideo extends AppCompatActivity {
 
     View.OnClickListener qualityChangerOnClickListener = new View.OnClickListener() {
 
-            @Override
+        @Override
         public void onClick(View view) {
             ArrayList<String> qualityInfo = new ArrayList<>();
-            for(Quality quality : qualities)
-            qualityInfo.add(quality.getQuality());
+            for (Quality quality : qualities)
+                qualityInfo.add(quality.getQuality());
             AlertDialog.Builder builder = new AlertDialog.Builder(WatchVideo.this, AlertDialog.THEME_DEVICE_DEFAULT_LIGHT);
             builder.setTitle("Quality")
                     .setItems(qualityInfo.toArray(new String[0]), new DialogInterface.OnClickListener() {
@@ -138,16 +146,17 @@ public class WatchVideo extends AppCompatActivity {
                             }
                         }
                     });
+
             builder.show();
         }
     };
-    DefaultHttpDataSourceFactory getSettedHeadersDataFactory()
-    {
+
+    DefaultHttpDataSourceFactory getSettedHeadersDataFactory() {
 
 
         String userAgent = Util.getUserAgent(context, "Mozilla/5.0 (Macintosh; U; Intel Mac OS X 10_5_8; en-US) AppleWebKit/532.5 (KHTML, like Gecko) Chrome/4.0.249.0 Safari/532.5");
-       if(currentScraper == 0 )
-         return new DefaultHttpDataSourceFactory(userAgent);
+        if (currentScraper == 0)
+            return new DefaultHttpDataSourceFactory(userAgent);
         DefaultHttpDataSourceFactory dataSourceFactory = new DefaultHttpDataSourceFactory(userAgent);
 
         dataSourceFactory.getDefaultRequestProperties().set("Accept", "*/*");
@@ -160,7 +169,7 @@ public class WatchVideo extends AppCompatActivity {
         dataSourceFactory.getDefaultRequestProperties().set("Sec-Fetch-Site", "cross-site");
         dataSourceFactory.getDefaultRequestProperties().set("User-Agent", userAgent);
         dataSourceFactory.getDefaultRequestProperties().set("Host", host);
-        return  dataSourceFactory;
+        return dataSourceFactory;
     }
 
     @Override
@@ -169,18 +178,23 @@ public class WatchVideo extends AppCompatActivity {
         setContentView(R.layout.videoviewer);
         setVideoOptions();
         initUIElements();
-        recent = openOrCreateDatabase("recent", MODE_PRIVATE, null);
         context = this;
         player = ExoPlayerFactory.newSimpleInstance(this);
         playerView.setPlayer(player);
-
-         link = getIntent().getStringExtra("link");
+        animeDatabase = AnimeDatabase.getInstance(getApplicationContext());
+        link = getIntent().getStringExtra("link");
 
         int lastIndexOfDash = link.lastIndexOf("-");
         episodeNumber = Integer.parseInt(link.substring(lastIndexOfDash + 1));
         animeName = getIntent().getStringExtra("animename");
-
+        Log.i("linkis", link);
         imageLink = getIntent().getStringExtra("imagelink");
+        // time = Long.parseLong(getIntent().getStringExtra("time"));
+        currentAnime = animeDatabase.animeDao().getAnimeByNameAndEpisodeNo(animeName, String.valueOf(episodeNumber));
+        Log.i("yotimertimer", "soja" + currentAnime.getTime());
+        //   Log.i("yotimerepisode",String.valueOf(episodeNumber));
+
+        // currentAnime.setTime(String.valueOf(time));
 
         new ScrapeVideoLink(link, this).execute();
         if (android.os.Build.VERSION.SDK_INT >= 26)
@@ -222,10 +236,16 @@ public class WatchVideo extends AppCompatActivity {
     }
 
     void executeQuery(String animeName, int episodeNumber, String link, String imageLink) {
-        String deleteQuery = "DELETE from anime where EPISODELINK='\"+nextlink+\"'";
-        recent.execSQL(deleteQuery);
-        String query = "'" + animeName + "','Episode " + episodeNumber + "','" + link + "','" + imageLink + "'";
-        recent.execSQL("INSERT INTO anime VALUES(" + query + ");");
+        Anime temp = animeDatabase.animeDao().getAnimeByNameAndEpisodeNo(animeName, String.valueOf(episodeNumber));
+        String time = "0";
+        if (temp != null)
+            time = temp.getTime();
+
+        animeDatabase.animeDao().deleteAnimeByNameAndEpisodeNo(animeName, String.valueOf(episodeNumber));
+        Anime anime = new Anime(animeName, link, String.valueOf(episodeNumber), imageLink, time);
+        animeDatabase.animeDao().insertAnime(anime);
+        currentAnime = anime;
+
 
     }
 
@@ -241,9 +261,11 @@ public class WatchVideo extends AppCompatActivity {
         @Override
         protected void onPreExecute() {
             super.onPreExecute();
+            // player.setPlayWhenReady(false);
             title.setVisibility(View.GONE);
             progressBar.setVisibility(View.VISIBLE);
             scrapers.clear();
+            qualities = new ArrayList<>();
 
         }
 
@@ -253,35 +275,45 @@ public class WatchVideo extends AppCompatActivity {
             try {
 
                 DefaultHttpDataSourceFactory dataSourceFactory = getSettedHeadersDataFactory();
-                Log.i("currentlyplaying",qualities.get(currentQuality).getQualityUrl());
+                Log.i("currentlyplaying", qualities.get(currentQuality).getQualityUrl());
                 HlsMediaSource hlsMediaSource =
                         new HlsMediaSource.Factory(dataSourceFactory).createMediaSource(Uri.parse(qualities.get(currentQuality).getQualityUrl()));
-               player.prepare(hlsMediaSource);
-                        player.setPlayWhenReady(true);
-                        if(changedScraper)
-                        {
-                            changedScraper = false;
-                            player.seekTo(time);
-                        }
-                new Timer().scheduleAtFixedRate(new TimerTask() {
+                player.prepare(hlsMediaSource);
+                player.setPlayWhenReady(true);
+//                if(changedAnime)
+//                {
+//                    changedAnime = false;
+//                    player.seekTo(0);
+//                }
+//                else
+                player.seekTo(Long.parseLong(currentAnime.getTime()));
+                startedPlaying = true;
+                updateTimer = new Timer();
+                updateTimer.scheduleAtFixedRate(new TimerTask() {
                     @Override
                     public void run() {
                         // Enter your code
-                        Log.i("yotimer","yotimer");
+
+
+                        currentAnime.setTime(String.valueOf(player.getCurrentPosition()));
+                        Log.i("yotimer", currentAnime.getTime());
+                        animeDatabase.animeDao().updateAnime(currentAnime);
                     }
-                }, 0, 5000);//pu
+                }, 0, 2000);
             } catch (Exception e) {
-                Log.i("exoerror",e.getMessage());
-                useFallBack();
+                Log.i("exoerror", e.getMessage());
+                //useFallBack();
             }
 
             player.addListener(new Player.EventListener() {
                 @Override
                 public void onPlayerStateChanged(boolean playWhenReady, int playbackState) {
                     if (playbackState == ExoPlayer.STATE_ENDED) {
+
                         if (nextVideoLink == null || nextVideoLink.equals(""))
                             Toast.makeText(getApplicationContext(), "Last Episode", Toast.LENGTH_SHORT).show();
                         else {
+
                             executeQuery(animeName, episodeNumber, nextVideoLink, imageLink);
                             player.stop();
                             new ScrapeVideoLink(nextVideoLink, context).execute();
@@ -296,13 +328,15 @@ public class WatchVideo extends AppCompatActivity {
 
                 @Override
                 public void onPlayerError(ExoPlaybackException error) {
-                    Log.i("exoerror",error.getMessage());
-                    currentScraper++;
-                    if(currentScraper==scrapers.size())
+                    Log.i("exoerror", error.getMessage());
+                    currentScraper--;
+                    if (currentScraper <0)
                         useFallBack();
-                    else
+                    else {
+                        link = gogoAnimeUrl;
                         changingScraper();
-                   // useFallBack();
+                    }
+                    // useFallBack();
                 }
             });
             progressBar.setVisibility(View.GONE);
@@ -316,14 +350,14 @@ public class WatchVideo extends AppCompatActivity {
         @Override
         protected Void doInBackground(Void... voids) {
             Document gogoAnimePageDocument = null;
-
+            Log.i("currentPlaying", gogoAnimeUrl);
             try {
                 if (gogoAnimeUrl.equals("https://www1.gogoanimes.ai/ansatsu-kyoushitsu-tv--episode-1"))//edge case
                     gogoAnimeUrl = url + "ansatsu-kyoushitsu-tv--episode-1";
 
 
                 gogoAnimePageDocument = Jsoup.connect(gogoAnimeUrl).get();
-               vidStreamUrl = "https:" + gogoAnimePageDocument.getElementsByClass("play-video").get(0).getElementsByTag("iframe").get(0).attr("src");
+                vidStreamUrl = "https:" + gogoAnimePageDocument.getElementsByClass("play-video").get(0).getElementsByTag("iframe").get(0).attr("src");
                 previousVideoLink = gogoAnimePageDocument.select("div[class=anime_video_body_episodes_l]").select("a").attr("abs:href");
                 nextVideoLink = gogoAnimePageDocument.select("div[class=anime_video_body_episodes_r]").select("a").attr("abs:href");
                 Option1 option1 = new Option1(gogoAnimePageDocument);
@@ -331,18 +365,21 @@ public class WatchVideo extends AppCompatActivity {
                 scrapers.add(option1);
                 scrapers.add(option2);
                 qualities = scrapers.get(currentScraper).getQualityUrls();
-                if(qualities.size()==0)
-                {
-                    currentScraper++;
-                    if(currentScraper==scrapers.size())
-                    {
+                if (qualities.size() == 0) {
+                    currentScraper--;
+                    if (currentScraper<0) {
                         useFallBack();
-                    }
-                    else
+                    } else {
+                        link = gogoAnimeUrl;
                         changingScraper();
+                    }
                 }
                 host = scrapers.get(currentScraper).getHost();
+                if(currentScraper==0)
                 currentQuality = 0;
+                else
+                    currentQuality = qualities.size()-1;
+
 
             } catch (Exception e) {
                 Log.i("gogoanimeerror", e.toString());
@@ -459,7 +496,7 @@ public class WatchVideo extends AppCompatActivity {
         super.onResume();
 
 
-            playerView.getPlayer().setPlayWhenReady(true);
+        playerView.getPlayer().setPlayWhenReady(true);
 
 
     }
@@ -484,6 +521,11 @@ public class WatchVideo extends AppCompatActivity {
 
 
             }
+            try {
+                updateTimer.cancel();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
             super.onBackPressed();
         }
         return false;
@@ -494,13 +536,21 @@ public class WatchVideo extends AppCompatActivity {
         Intent intent = new Intent(context, webvideo.class);
         intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         intent.putExtra("videostreamlink", vidStreamUrl);
+        try {
+            updateTimer.cancel();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
         startActivity(intent);
+
         finish();
     }
-    void changingScraper()
-    {
+
+    void changingScraper() {
         new ScrapeVideoLink(link, context).execute();
         changedScraper = true;
-        time = player.getCurrentPosition();
+        if (startedPlaying)
+            time = player.getCurrentPosition();
     }
 }

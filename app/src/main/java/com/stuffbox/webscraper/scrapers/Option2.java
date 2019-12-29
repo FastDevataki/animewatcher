@@ -94,6 +94,8 @@ public class Option2 extends Scraper {
 
                     qualities.add(new Quality(quality,qualityUrl));
                 }
+                if(qualities.size()==0)
+                    qualities.add(new Quality("Unknown",m3u8Link));
             }
         } catch (Exception e) {
             e.printStackTrace();

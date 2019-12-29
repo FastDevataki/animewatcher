@@ -37,7 +37,7 @@ public class Anime {
         this.link = link;
         this.episodeNo = episodeno;
         this.imageLink = imageLink;
-        this.time ="0";
+        this.time =time;
     }
     @Ignore
     public Anime(String name, String link, String episodeno, String imageLink,String time) {
@@ -45,7 +45,7 @@ public class Anime {
         this.link = link;
         this.episodeNo = episodeno;
         this.imageLink = imageLink;
-        this.time ="0";
+        this.time =time;
     }
 
     public String getTime() {

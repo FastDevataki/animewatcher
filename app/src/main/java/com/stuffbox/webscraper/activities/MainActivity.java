@@ -51,7 +51,6 @@ public class MainActivity extends AppCompatActivity {
     private ArrayList<Anime> mAnimeList = new ArrayList<>();
     MenuItem prevMenuItem;
     RecyclerView recyclerView;
-    private AnimeDatabase mDb;
 
     BottomNavigationView bottomNavigationView;
     ViewPager viewPager;
