@@ -22,5 +22,6 @@ public interface AnimeDao {
     void deleteAnime(Anime anime);
     @Query("DELETE FROM anime WHERE episodeNo = :episodeNo and name= :name")
     void deleteAnimeByNameAndEpisodeNo(String name,String episodeNo);
-
+    @Query("SELECT * FROM anime where name = :name and episodeNo= :episodeNo")
+    Anime getAnimeByNameAndEpisodeNo(String name,String episodeNo);
 }
