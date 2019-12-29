@@ -63,7 +63,7 @@ public class SearchAdapter extends RecyclerView.Adapter<SearchAdapter.MyViewHold
     @Override
     public void onBindViewHolder(final MyViewHolder holder, final int position) {
         holder.title.setText(mAnimeList.get(position).getName());
-        holder.episodeno.setText(mAnimeList.get(position).getEpisodeno());
+        holder.episodeno.setText(mAnimeList.get(position).getEpisodeNo());
         holder.cardView.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {

@@ -24,6 +24,8 @@ import com.stuffbox.webscraper.InputFilterMinMax;
 import com.stuffbox.webscraper.R;
 import com.stuffbox.webscraper.adapters.EpisodeAdapter;
 import com.stuffbox.webscraper.constants.Constants;
+import com.stuffbox.webscraper.database.AnimeDatabase;
+import com.stuffbox.webscraper.models.Anime;
 
 import org.jsoup.Jsoup;
 import org.jsoup.select.Elements;
@@ -104,14 +106,18 @@ public class selectEpisode extends AppCompatActivity {
                 Intent intent = new Intent(getApplicationContext(), WatchVideo.class);
                 intent.putExtra("link", mSiteLink.get(episodeno - 1));
                 intent.putExtra("noofepisodes", String.valueOf(mEpisodeList.size()));
-                String z="'"+ animenameforrecents+"','Episode "+episodeno+"','"+mSiteLink.get(episodeno-1)+"','"+imagelink+"'";
-                recent.execSQL("delete from anime where EPISODELINK='"+mSiteLink.get(episodeno-1)+"'");
-                recent.execSQL("INSERT INTO anime VALUES("+z+");");                intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                AnimeDatabase database = AnimeDatabase.getInstance(getApplicationContext());
+                Anime temp = database.animeDao().getAnimeByNameAndEpisodeNo(animenameforrecents,"Episode "+episodeno);
+                String time = temp.getTime();
+                database.animeDao().deleteAnimeByNameAndEpisodeNo(animenameforrecents,"Episode "+episodeno);
+                Anime anime = new Anime(animenameforrecents,"Episode "+episodeno,mSiteLink.get(episodeno-1),imagelink,time);
+
                 intent.putExtra("imagelink",imagelink);
                 intent.putExtra("animename",animenameforrecents);
                 intent.putExtra("animenames",animenameforrecents);
                 intent.putExtra("camefrom","selectepisode");
                 intent.putExtra("selectepisodelink",link);
+                intent.putExtra("time",time);
                 getApplicationContext().startActivity(intent);
             }
             else
@@ -192,21 +198,7 @@ else
 
 
             mRecyclerView.setHasFixedSize(true);
-            if(mEpisodeList.size()==1)
-            {
-                Intent intent=new Intent(getApplicationContext(),WatchVideo.class);
-                intent.putExtra("link",mSiteLink.get(0));
-                intent.putExtra("noofepisodes",String.valueOf(mEpisodeList.size()));
-                String z="'"+ animenameforrecents+"','Episode "+1+"','"+mSiteLink.get(0)+"','"+imagelink+"'";
-                recent.execSQL("delete from anime where EPISODELINK='"+mSiteLink.get(0)+"'");
 
-                recent.execSQL("INSERT INTO anime VALUES("+z+");");                intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                intent.putExtra("animename",animenameforrecents);
-                intent.putExtra("imagelink",imagelink);
-                intent.putExtra("camefrom","selectepisode");
-                intent.putExtra("animenames",animenameforrecents);
-                getApplicationContext().startActivity(intent);
-            }
             mRecyclerView.setLayoutManager(linearLayoutManager);
             mRecyclerView.setAdapter(mDataAdapter);
             editText.setHint("Episode no between 1 to "+mEpisodeList.size());
