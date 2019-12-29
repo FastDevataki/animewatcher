@@ -1,23 +1,59 @@
 package com.stuffbox.webscraper.models;
 
-public class Anime {
-    String name;
-    String  link;
-    String  episodeno;
-    String imageLink;
+import androidx.room.ColumnInfo;
+import androidx.room.Entity;
+import androidx.room.Ignore;
+import androidx.room.PrimaryKey;
 
+@Entity(tableName = "anime")
+public class Anime {
+    @PrimaryKey(autoGenerate = true)
+    public int id ;
+   @ColumnInfo(name = "name")
+    String name;
+    @ColumnInfo(name = "link")
+    String  link;
+    @ColumnInfo(name = "episodeNo")
+    String  episodeNo;
+    @ColumnInfo(name = "imageLink")
+    String imageLink;
+    @ColumnInfo(name = "time")
+
+    String time;
+    @Ignore
     public Anime(String name, String link, String imageLink) {
+        this.id = id;
         this.name = name;
         this.link = link;
         this.imageLink = imageLink;
-        episodeno="";
+        episodeNo="";
+        this.time = "0";
+
     }
 
-    public Anime(String name, String link, String episodeno, String imageLink) {
+    public Anime(int id ,String name, String link, String episodeno, String imageLink,String time) {
+        this.id = id;
         this.name = name;
         this.link = link;
-        this.episodeno = episodeno;
+        this.episodeNo = episodeno;
         this.imageLink = imageLink;
+        this.time ="0";
+    }
+    @Ignore
+    public Anime(String name, String link, String episodeno, String imageLink,String time) {
+        this.name = name;
+        this.link = link;
+        this.episodeNo = episodeno;
+        this.imageLink = imageLink;
+        this.time ="0";
+    }
+
+    public String getTime() {
+        return time;
+    }
+
+    public void setTime(String time) {
+        this.time = time;
     }
 
     public Anime()
@@ -25,12 +61,12 @@ public class Anime {
 
     }
 
-    public String getEpisodeno() {
-        return episodeno;
+    public String getEpisodeNo() {
+        return episodeNo;
     }
 
-    public void setEpisodeno(String episodeno) {
-        this.episodeno = episodeno;
+    public void setEpisodeNo(String episodeNo) {
+        this.episodeNo = episodeNo;
     }
 
     public String getName() {

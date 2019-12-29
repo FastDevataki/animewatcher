@@ -50,6 +50,8 @@ import org.jsoup.nodes.Document;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Timer;
+import java.util.TimerTask;
 
 
 public class WatchVideo extends AppCompatActivity {
@@ -82,7 +84,7 @@ public class WatchVideo extends AppCompatActivity {
     int episodeNumber;
     String backStack = "";
     SQLiteDatabase recent;
-
+    Timer updateTimer ;
     private PictureInPictureParams.Builder mPictureInPictureParamsBuilder;
     View.OnClickListener nextEpisodeOnClickListener = new View.OnClickListener() {
         @Override
@@ -261,6 +263,13 @@ public class WatchVideo extends AppCompatActivity {
                             changedScraper = false;
                             player.seekTo(time);
                         }
+                new Timer().scheduleAtFixedRate(new TimerTask() {
+                    @Override
+                    public void run() {
+                        // Enter your code
+                        Log.i("yotimer","yotimer");
+                    }
+                }, 0, 5000);//pu
             } catch (Exception e) {
                 Log.i("exoerror",e.getMessage());
                 useFallBack();

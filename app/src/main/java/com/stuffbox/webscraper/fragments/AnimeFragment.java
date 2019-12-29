@@ -101,7 +101,7 @@ public class AnimeFragment extends Fragment {
                     anime.setName(mAnimenName);
                     Log.i("imagelinkis",imagelink);
                     anime.setLink(mlink);
-                    anime.setEpisodeno(episodeno);
+                    anime.setEpisodeNo(episodeno);
                     anime.setImageLink(imagelink);
                     AnimeList.add(anime);
                 }

@@ -24,6 +24,7 @@ import com.stuffbox.webscraper.R;
 import com.stuffbox.webscraper.adapters.SearchAdapter;
 import com.stuffbox.webscraper.adapters.ViewPagerAdapter;
 import com.stuffbox.webscraper.constants.Constants;
+import com.stuffbox.webscraper.database.AnimeDatabase;
 import com.stuffbox.webscraper.models.Anime;
 
 import org.jsoup.Jsoup;
@@ -50,6 +51,7 @@ public class MainActivity extends AppCompatActivity {
     private ArrayList<Anime> mAnimeList = new ArrayList<>();
     MenuItem prevMenuItem;
     RecyclerView recyclerView;
+    private AnimeDatabase mDb;
 
     BottomNavigationView bottomNavigationView;
     ViewPager viewPager;
@@ -99,8 +101,7 @@ public class MainActivity extends AppCompatActivity {
         noanime=findViewById(R.id.noanime);
         ViewPagerAdapter viewPagerAdapter;
         viewPager =  findViewById(R.id.viewPager);
-            SQLiteDatabase recent = openOrCreateDatabase("recent", MODE_PRIVATE, null);
-            recent.execSQL("CREATE TABLE IF NOT EXISTS anime(Animename VARCHAR,Episodeno VARCHAR,EPISODELINK VARCHAR,IMAGELINK VARCHAR)");
+        AnimeDatabase animeDatabase = AnimeDatabase.getInstance(this);
         progressBar=findViewById(R.id.progress2);
         viewPagerAdapter = new ViewPagerAdapter(getSupportFragmentManager());
         viewPager.setOffscreenPageLimit(3);
