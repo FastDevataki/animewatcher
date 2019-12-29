@@ -275,6 +275,7 @@ public class WatchVideo extends AppCompatActivity {
                         else {
                             executeQuery(animeName, episodeNumber, nextVideoLink, imageLink);
                             player.stop();
+                            currentScraper =0;
                             new ScrapeVideoLink(nextVideoLink, context).execute();
 
                         }
@@ -306,7 +307,7 @@ public class WatchVideo extends AppCompatActivity {
 
         @Override
         protected Void doInBackground(Void... voids) {
-            Document gogoAnimePageDocument = null;
+            Document gogoAnimePageDocument ;
 
             try {
                 if (gogoAnimeUrl.equals("https://www1.gogoanimes.ai/ansatsu-kyoushitsu-tv--episode-1"))//edge case
