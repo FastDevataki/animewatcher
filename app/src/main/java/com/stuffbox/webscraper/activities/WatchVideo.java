@@ -86,11 +86,13 @@ public class WatchVideo extends AppCompatActivity {
     boolean changedAnime = false;
     String backStack = "";
     Anime currentAnime;
+    String tempGogoAnimeLink ;
     Timer updateTimer;
     private PictureInPictureParams.Builder mPictureInPictureParamsBuilder;
     View.OnClickListener nextEpisodeOnClickListener = new View.OnClickListener() {
         @Override
         public void onClick(View view) {
+            Log.i("igotcalled","igotcalled with episode number "+ episodeNumber);
             if (nextVideoLink == null || nextVideoLink.equals(""))
                 Toast.makeText(getApplicationContext(), "Last Episode", Toast.LENGTH_SHORT).show();
             else {
@@ -100,8 +102,47 @@ public class WatchVideo extends AppCompatActivity {
                 executeQuery(animeName, episodeNumber, nextVideoLink, imageLink);
                 currentScraper = 1;
                 player.setPlayWhenReady(false);
+                changedEpisode = false;
                 new ScrapeVideoLink(nextVideoLink, context).execute();
             }
+        }
+    };
+    Player.EventListener eventListener = new Player.EventListener() {
+        @Override
+        public void onPlayerStateChanged(boolean playWhenReady, int playbackState) {
+            if (playbackState == ExoPlayer.STATE_ENDED && playWhenReady ) {
+                if (nextVideoLink == null || nextVideoLink.equals(""))
+                    Toast.makeText(getApplicationContext(), "Last Episode", Toast.LENGTH_SHORT).show();
+                else {
+                    changedEpisode = true;
+
+                    updateTimer.cancel();
+                    episodeNumber += 1;
+                    changedAnime = true;
+                    executeQuery(animeName, episodeNumber, nextVideoLink, imageLink);
+                    currentScraper = 1;
+                  //  player.setPlayWhenReady(false);
+                    changedEpisode = false;
+                    new ScrapeVideoLink(nextVideoLink, context).execute();
+                }
+            } else if (playbackState == ExoPlayer.STATE_BUFFERING) {
+                progressBar.setVisibility(View.VISIBLE);
+            } else {
+                progressBar.setVisibility(View.INVISIBLE);
+            }
+        }
+
+        @Override
+        public void onPlayerError(ExoPlaybackException error) {
+            Log.i("exoerror", error.getMessage());
+            currentScraper--;
+            if (currentScraper <0)
+                useFallBack();
+            else {
+                link = tempGogoAnimeLink;
+                changingScraper();
+            }
+            // useFallBack();
         }
     };
     View.OnClickListener previousEpisodeOnClickListener = new View.OnClickListener() {
@@ -150,6 +191,7 @@ public class WatchVideo extends AppCompatActivity {
             builder.show();
         }
     };
+    private boolean changedEpisode = false;
 
     DefaultHttpDataSourceFactory getSettedHeadersDataFactory() {
 
@@ -261,6 +303,7 @@ public class WatchVideo extends AppCompatActivity {
         @Override
         protected void onPreExecute() {
             super.onPreExecute();
+            tempGogoAnimeLink = gogoAnimeUrl;
             // player.setPlayWhenReady(false);
             title.setVisibility(View.GONE);
             progressBar.setVisibility(View.VISIBLE);
@@ -275,6 +318,7 @@ public class WatchVideo extends AppCompatActivity {
             try {
 
                 DefaultHttpDataSourceFactory dataSourceFactory = getSettedHeadersDataFactory();
+                Log.i("currentScraper",""+currentScraper);
                 Log.i("currentlyplaying", qualities.get(currentQuality).getQualityUrl());
                 HlsMediaSource hlsMediaSource =
                         new HlsMediaSource.Factory(dataSourceFactory).createMediaSource(Uri.parse(qualities.get(currentQuality).getQualityUrl()));
@@ -304,41 +348,14 @@ public class WatchVideo extends AppCompatActivity {
                 Log.i("exoerror", e.getMessage());
                 //useFallBack();
             }
-
-            player.addListener(new Player.EventListener() {
-                @Override
-                public void onPlayerStateChanged(boolean playWhenReady, int playbackState) {
-                    if (playbackState == ExoPlayer.STATE_ENDED) {
-
-                        if (nextVideoLink == null || nextVideoLink.equals(""))
-                            Toast.makeText(getApplicationContext(), "Last Episode", Toast.LENGTH_SHORT).show();
-                        else {
-
-                            executeQuery(animeName, episodeNumber, nextVideoLink, imageLink);
-                            player.stop();
-                            new ScrapeVideoLink(nextVideoLink, context).execute();
-
-                        }
-                    } else if (playbackState == ExoPlayer.STATE_BUFFERING) {
-                        progressBar.setVisibility(View.VISIBLE);
-                    } else {
-                        progressBar.setVisibility(View.INVISIBLE);
-                    }
-                }
-
-                @Override
-                public void onPlayerError(ExoPlaybackException error) {
-                    Log.i("exoerror", error.getMessage());
-                    currentScraper--;
-                    if (currentScraper <0)
-                        useFallBack();
-                    else {
-                        link = gogoAnimeUrl;
-                        changingScraper();
-                    }
-                    // useFallBack();
-                }
-            });
+            try {
+                player.removeListener(eventListener);
+            }
+            catch (Exception e)
+            {
+                e.printStackTrace();
+            }
+            player.addListener(eventListener);
             progressBar.setVisibility(View.GONE);
             title.setText(animeName + " Episode " + episodeNumber);
             nextEpisodeButton.setOnClickListener(nextEpisodeOnClickListener);
