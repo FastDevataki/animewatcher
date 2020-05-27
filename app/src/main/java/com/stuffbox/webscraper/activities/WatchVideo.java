@@ -305,7 +305,7 @@ public class WatchVideo extends AppCompatActivity implements ConnectableDeviceLi
 
     private void selectDevice() {
         final DevicePicker devicePicker = new DevicePicker(this);
-        AlertDialog dialog = devicePicker.getPickerDialog("Show Image", new AdapterView.OnItemClickListener() {
+        AlertDialog dialog = devicePicker.getPickerDialog("Cast Video", new AdapterView.OnItemClickListener() {
             @Override
             public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
                 mDevice = (ConnectableDevice) parent.getItemAtPosition(position);
