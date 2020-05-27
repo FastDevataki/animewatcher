@@ -25,3 +25,5 @@
 <img src="./Screenshots/fight.jpeg"/>
 <p>Jsoup- for webscraping</p>
 <p>Picasso - for displaying images and caching</p>
+<p> Cast</p>
+<p>Connect SDK - for casting</p>
