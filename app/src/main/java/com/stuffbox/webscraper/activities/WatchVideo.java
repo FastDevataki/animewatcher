@@ -12,12 +12,14 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.res.Configuration;
 import android.graphics.drawable.Icon;
+import android.media.session.PlaybackState;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.KeyEvent;
 import android.view.View;
+import android.widget.AdapterView;
 import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
@@ -29,13 +31,29 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.connectsdk.core.MediaInfo;
+import com.connectsdk.device.ConnectableDevice;
+import com.connectsdk.device.ConnectableDeviceListener;
+import com.connectsdk.device.DevicePicker;
+import com.connectsdk.discovery.CapabilityFilter;
+import com.connectsdk.discovery.DiscoveryManager;
+import com.connectsdk.service.DeviceService;
+import com.connectsdk.service.capability.MediaControl;
+import com.connectsdk.service.capability.MediaPlayer;
+import com.connectsdk.service.capability.VolumeControl;
+import com.connectsdk.service.capability.listeners.ResponseListener;
+import com.connectsdk.service.command.ServiceCommandError;
+import com.connectsdk.service.sessions.LaunchSession;
 import com.google.android.exoplayer2.ExoPlaybackException;
 import com.google.android.exoplayer2.ExoPlayer;
 import com.google.android.exoplayer2.ExoPlayerFactory;
 import com.google.android.exoplayer2.Player;
 import com.google.android.exoplayer2.SimpleExoPlayer;
+import com.google.android.exoplayer2.source.ExtractorMediaSource;
+import com.google.android.exoplayer2.source.MediaSource;
 import com.google.android.exoplayer2.source.hls.HlsMediaSource;
 import com.google.android.exoplayer2.ui.PlayerView;
+import com.google.android.exoplayer2.upstream.DataSource;
 import com.google.android.exoplayer2.upstream.DefaultHttpDataSourceFactory;
 import com.google.android.exoplayer2.util.Util;
 import com.stuffbox.webscraper.R;
@@ -45,17 +63,19 @@ import com.stuffbox.webscraper.models.Quality;
 import com.stuffbox.webscraper.scrapers.Option1;
 import com.stuffbox.webscraper.scrapers.Option2;
 import com.stuffbox.webscraper.scrapers.Scraper;
+import com.stuffbox.webscraper.scrapers.VidstreamScraper;
 
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 
+import java.sql.Time;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
 
 
-public class WatchVideo extends AppCompatActivity {
+public class WatchVideo extends AppCompatActivity implements ConnectableDeviceListener {
     PlayerView playerView;
     SimpleExoPlayer player;
     LinearLayout controls;
@@ -63,13 +83,17 @@ public class WatchVideo extends AppCompatActivity {
     ProgressBar progressBar;
     TextView title;
     String imageLink;
+
     boolean changedScraper = false;
     long time;
     AnimeDatabase animeDatabase;
+    ImageButton castButton;
+    private Timer refreshTimer;
+    static boolean seeked = false;
     String nextVideoLink = null;
     String previousVideoLink = null;
     public static String url = "https://www1.gogoanimes.ai/";
-    int currentScraper = 1;
+    int currentScraper = 2;
     ArrayList<Scraper> scrapers = new ArrayList<>();
     boolean startedPlaying = false;
     Context context;
@@ -110,6 +134,11 @@ public class WatchVideo extends AppCompatActivity {
     Player.EventListener eventListener = new Player.EventListener() {
         @Override
         public void onPlayerStateChanged(boolean playWhenReady, int playbackState) {
+            if(playbackState == PlaybackState.ACTION_SEEK_TO)
+            {
+                if(mMediaControl!=null)
+                    mMediaControl.seek(player.getCurrentPosition(),null);
+            }
             if (playbackState == ExoPlayer.STATE_ENDED && playWhenReady ) {
                 if (nextVideoLink == null || nextVideoLink.equals(""))
                     Toast.makeText(getApplicationContext(), "Last Episode", Toast.LENGTH_SHORT).show();
@@ -192,6 +221,10 @@ public class WatchVideo extends AppCompatActivity {
         }
     };
     private boolean changedEpisode = false;
+    private DiscoveryManager mDiscoveryManager;
+    private ConnectableDevice mDevice;
+    private LaunchSession mLaunchSession;
+    private MediaControl mMediaControl;
 
     DefaultHttpDataSourceFactory getSettedHeadersDataFactory() {
 
@@ -217,10 +250,14 @@ public class WatchVideo extends AppCompatActivity {
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
         setContentView(R.layout.videoviewer);
+
         setVideoOptions();
         initUIElements();
         context = this;
+
+        initDiscoverer();
         player = ExoPlayerFactory.newSimpleInstance(this);
         playerView.setPlayer(player);
         animeDatabase = AnimeDatabase.getInstance(getApplicationContext());
@@ -244,6 +281,89 @@ public class WatchVideo extends AppCompatActivity {
 
     }
 
+    private void initDiscoverer() {
+        DiscoveryManager.init(context);
+
+        mDiscoveryManager = DiscoveryManager.getInstance();
+        mDiscoveryManager.registerDefaultDeviceTypes();
+        mDiscoveryManager.setPairingLevel(DiscoveryManager.PairingLevel.ON);
+        CapabilityFilter videoFilter = new CapabilityFilter(
+                MediaPlayer.Play_Video,
+                MediaControl.Any,
+                VolumeControl.Any
+        );
+
+        CapabilityFilter imageCapabilities = new CapabilityFilter(
+                MediaPlayer.Display_Image
+        );
+        mDiscoveryManager.setCapabilityFilters(videoFilter, imageCapabilities);
+
+        mDiscoveryManager.start();
+        castButton = findViewById(R.id.cast_button);
+
+    }
+
+    private void selectDevice() {
+        final DevicePicker devicePicker = new DevicePicker(this);
+        AlertDialog dialog = devicePicker.getPickerDialog("Show Image", new AdapterView.OnItemClickListener() {
+            @Override
+            public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+                mDevice = (ConnectableDevice) parent.getItemAtPosition(position);
+                Log.i("deviceIp",mDevice.getIpAddress());
+                mDevice.addListener(WatchVideo.this);
+                try {
+                    mDevice.disconnect();
+                    seeked = false;
+
+                }
+                catch (Exception e)
+                {
+                    e.printStackTrace();;
+
+                }
+                mDevice.connect();
+                String mediaURL = qualities.get(currentQuality).getQualityUrl(); // credit: Blender Foundation/CC By 3.0
+                String iconURL = "http://www.connectsdk.com/files/2013/9656/8845/test_image_icon.jpg"; // credit: sintel-durian.deviantart.comx
+                String title = animeName + " Episode " + episodeNumber;
+                String description = "Blender Open Movie Project";
+                String mimeType = "video/mp4"; // audio/* for audio files
+
+                MediaInfo mediaInfo = new MediaInfo.Builder(mediaURL, mimeType)
+                        .setTitle(title)
+                        .setDescription(description)
+                        .setIcon(iconURL)
+                        .build();
+
+
+
+                final MediaPlayer.LaunchListener listener = new MediaPlayer.LaunchListener() {
+                    @Override
+                    public void onSuccess(MediaPlayer.MediaLaunchObject object) {
+                        // save these object references to control media playback
+
+                        mLaunchSession = object.launchSession;
+                        mMediaControl = object.mediaControl;
+                        // you will want to enable your media control UI elements here
+                        new Timer().schedule(new TimerTask() {
+                            @Override
+                            public void run() {
+                                mMediaControl.seek(player.getCurrentPosition(),null);
+                            }
+                        },3000);
+                    }
+
+                    @Override
+                    public void onError(ServiceCommandError error) {
+                        Log.d("App Tag", "Play media failure: " + error);
+                    }
+                };
+                mDevice.getCapability(MediaPlayer.class).playMedia(mediaInfo,false,listener);
+
+            }
+        });
+        dialog.show();
+    }
+
     void initUIElements() {
         playerView = findViewById(R.id.exoplayer);
         controls = findViewById(R.id.wholecontroller);
@@ -251,6 +371,7 @@ public class WatchVideo extends AppCompatActivity {
         title = findViewById(R.id.titleofanime);
         qualityChangerButton = findViewById(R.id.qualitychanger);
         nextEpisodeButton = findViewById(R.id.exo_nextvideo);
+
         previousEpisodeButton = findViewById(R.id.exo_prevvideo);
     }
 
@@ -291,6 +412,31 @@ public class WatchVideo extends AppCompatActivity {
 
     }
 
+    @Override
+    public void onDeviceReady(ConnectableDevice device) {
+
+    }
+
+    @Override
+    public void onDeviceDisconnected(ConnectableDevice device) {
+
+    }
+
+    @Override
+    public void onPairingRequired(ConnectableDevice device, DeviceService service, DeviceService.PairingType pairingType) {
+
+    }
+
+    @Override
+    public void onCapabilityUpdated(ConnectableDevice device, List<String> added, List<String> removed) {
+
+    }
+
+    @Override
+    public void onConnectionFailed(ConnectableDevice device, ServiceCommandError error) {
+
+    }
+
     class ScrapeVideoLink extends AsyncTask<Void, Void, Void> {
         String gogoAnimeUrl;
         Context context;
@@ -320,9 +466,20 @@ public class WatchVideo extends AppCompatActivity {
                 DefaultHttpDataSourceFactory dataSourceFactory = getSettedHeadersDataFactory();
                 Log.i("currentScraper",""+currentScraper);
                 Log.i("currentlyplaying", qualities.get(currentQuality).getQualityUrl());
-                HlsMediaSource hlsMediaSource =
-                        new HlsMediaSource.Factory(dataSourceFactory).createMediaSource(Uri.parse(qualities.get(currentQuality).getQualityUrl()));
-                player.prepare(hlsMediaSource);
+                MediaSource mediaSource;
+
+                if(currentScraper ==2) {
+                    mediaSource = new ExtractorMediaSource.Factory(
+                            new DefaultHttpDataSourceFactory("exoplayer")).createMediaSource(Uri.parse(qualities.get(currentQuality).getQualityUrl()));
+
+                }
+                else {
+                    HlsMediaSource hlsMediaSource =
+                            new HlsMediaSource.Factory(dataSourceFactory).createMediaSource(Uri.parse(qualities.get(currentQuality).getQualityUrl()));
+                    mediaSource = hlsMediaSource;
+
+                }
+                player.prepare(mediaSource);
                 player.setPlayWhenReady(true);
 //                if(changedAnime)
 //                {
@@ -332,18 +489,28 @@ public class WatchVideo extends AppCompatActivity {
 //                else
                 player.seekTo(Long.parseLong(currentAnime.getTime()));
                 startedPlaying = true;
+                if(updateTimer !=null)
+                {
+                    updateTimer.cancel();
+                    updateTimer = null;
+                }
                 updateTimer = new Timer();
                 updateTimer.scheduleAtFixedRate(new TimerTask() {
                     @Override
                     public void run() {
                         // Enter your code
 
+                        runOnUiThread(new Runnable() {
+                            @Override
+                            public void run() {
+                                currentAnime.setTime(String.valueOf(player.getCurrentPosition()));
 
-                        currentAnime.setTime(String.valueOf(player.getCurrentPosition()));
-                        Log.i("yotimer", currentAnime.getTime());
+                            }
+                        });
+
                         animeDatabase.animeDao().updateAnime(currentAnime);
                     }
-                }, 0, 2000);
+                }, 0, 1000);
             } catch (Exception e) {
                 Log.i("exoerror", e.getMessage());
                 //useFallBack();
@@ -360,6 +527,13 @@ public class WatchVideo extends AppCompatActivity {
             title.setText(animeName + " Episode " + episodeNumber);
             nextEpisodeButton.setOnClickListener(nextEpisodeOnClickListener);
             previousEpisodeButton.setOnClickListener(previousEpisodeOnClickListener);
+            castButton.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View view) {
+                    selectDevice();
+
+                }
+            });
             qualityChangerButton.setOnClickListener(qualityChangerOnClickListener);
             title.setVisibility(View.VISIBLE);
         }
@@ -377,10 +551,14 @@ public class WatchVideo extends AppCompatActivity {
                 vidStreamUrl = "https:" + gogoAnimePageDocument.getElementsByClass("play-video").get(0).getElementsByTag("iframe").get(0).attr("src");
                 previousVideoLink = gogoAnimePageDocument.select("div[class=anime_video_body_episodes_l]").select("a").attr("abs:href");
                 nextVideoLink = gogoAnimePageDocument.select("div[class=anime_video_body_episodes_r]").select("a").attr("abs:href");
+                VidstreamScraper scraper = new VidstreamScraper(gogoAnimePageDocument);
+
                 Option1 option1 = new Option1(gogoAnimePageDocument);
                 Option2 option2 = new Option2(gogoAnimePageDocument);
                 scrapers.add(option1);
                 scrapers.add(option2);
+                scrapers.add(scraper);
+
                 qualities = scrapers.get(currentScraper).getQualityUrls();
                 if (qualities.size() == 0) {
                     currentScraper--;
@@ -543,6 +721,7 @@ public class WatchVideo extends AppCompatActivity {
             } catch (Exception e) {
                 e.printStackTrace();
             }
+            mDiscoveryManager.onDestroy();
             super.onBackPressed();
         }
         return false;
